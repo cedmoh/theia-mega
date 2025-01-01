@@ -16,7 +16,7 @@ LiquidCrystal_I2C lcd(0x27, 16, 4);
 
 #define MOTOR_SPEED 120
 
-// to prevent damage to the engine                        
+// to prevent damage to the engine
 #define MOTOR_SAFETY_DELAY 200
 
 // order
@@ -37,11 +37,29 @@ LiquidCrystal_I2C lcd(0x27, 16, 4);
 #define PEDAL 4
 #define CALIB 6
 
+// shortcut keys
+#define SHORTCUT_KEY_CALIBRATION_START_LIVE_VIEW KEY_F5 // shortcut key to start the live view when the glass is lowered
+#define SHORTCUT_KEY_CALIBRATION_STOP_LIVE_VIEW KEY_F4  // shortcut key to stop the live view when the glass is lifted
+#define SHORTCUT_KEY_SWITCH_CAMERA_PREVIOUS KEY_F7      // shortcut key to swap to the previous camera
+#define SHORTCUT_KEY_SWITCH_CAMERA_NEXT KEY_F8          // shortcut key to swap to the next camera
+
+// state button names
+#define STATE_BUTTON_BUZZER stateButtons[0]                    // 0  Buzzer
+#define STATE_BUTTON_LED_MODE stateButtons[1]                  // 1  LED Mode
+#define STATE_BUTTON_UNUSED_2 stateButtons[2]                  // 2  [UNUSED]
+#define STATE_BUTTON_UNUSED_3 stateButtons[3]                  // 3  [UNUSED]
+#define STATE_BUTTON_PEDAL stateButtons[4]                     // 4  Pedal
+#define STATE_BUTTON_SCAN_ORDER_SELECT stateButtons[5]         // 5  Scan Order Selector
+#define STATE_BUTTON_SCAN_MODE_AND_CALIBRATION stateButtons[6] // 6  Scan Mode & Calibration
+#define STATE_BUTTON_SCAN stateButtons[7]                      // 7  Scan
+#define STATE_BUTTON_GLASS_DOWN_SENSOR stateButtons[8]         // 8  Glass Down Sensor
+#define STATE_BUTTON_GLASS_UP_SENSOR stateButtons[9]           // 9  Glass Up Sensor
+#define STATE_BUTTON_LED_PROJECTOR_SENSOR stateButtons[10]     // 10 LED Projector Sensor
+
 const unsigned short LED_PROJECTOR = 9U;
-const unsigned short LED_PROJECTOR_HIGH = 255;      // lit
-const unsigned short LED_PROJECTOR_LOW = 20;        // dimRL
-const unsigned long LED_PROJECTOR_TIMOUT = 300000U; // 5 minutes
-// const unsigned long LED_PROJECTOR_TIMOUT = 30000U; // half a minute
+const unsigned short LED_PROJECTOR_HIGH = 255;       // lit
+const unsigned short LED_PROJECTOR_LOW = 20;         // dimRL
+const unsigned long LED_PROJECTOR_TIMEOUT = 300000U; // 5 minutes
 
 const unsigned short BUZZER = 4U;
 const unsigned short SCAN_LED = 13U;
@@ -51,16 +69,18 @@ const unsigned short GLASS_DOWN_SENSOR = 8;
 const unsigned short GLASS_MOTOR_UP = 6;   // (RED LED)
 const unsigned short GLASS_MOTOR_DOWN = 5; // (GREEN LED)
 
-const unsigned long CALIBRATION_DURATION = 180000U;     // 3 minutes
+const unsigned long CALIBRATION_DURATION = 240000U;     // 4 minutes
 const unsigned long CALIBRATION_ALARM_DURATION = 8000U; // 8 seconds
 // const unsigned long CALIBRATION_DURATION = 4000U; // 4 seconds
 // const unsigned long CALIBRATION_ALARM_DURATION = 1000U; // 1 second
+
+const unsigned long BUTTON_BEEP_DURATION = 200U; // the duration of every button press beep
 
 bool BottomTouchdownFlag = false; // Used in auto mode, has the pedal touched the bottom sensor.
 bool IsCalibrating = false;       // Is the calibration in action
 bool IsScanBlinking = false;      // Is the scan button blinking
 
-void nothing(){};
+void nothing() {};
 
 void test(StateButton *self);
 
@@ -145,6 +165,24 @@ void countup()
   lcd.print(str);
 }
 
+// beeping
+
+void beep_start()
+{
+  digitalWrite(BUZZER, HIGH);
+}
+
+void beep_end()
+{
+  digitalWrite(BUZZER, LOW);
+}
+
+void beep_signal()
+{
+  beep_start();
+  waitcall(beep_end, BUTTON_BEEP_DURATION);
+}
+
 // alert
 
 const int MESSAGE_DELAY = 3000;
@@ -175,6 +213,12 @@ void scan_blink()
 
 void switch_ord(StateButton *self)
 {
+  if (STATE_BUTTON_SCAN_ORDER_SELECT.counter % 2 == 1)
+  {
+    // push
+    beep_signal();
+  }
+
   if (self->counter > 9)
     self->counter = IN_APP;
 
@@ -191,6 +235,12 @@ void switch_led_side(StateButton *self)
 
 void switch_mode(StateButton *self)
 {
+  if (STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.counter % 2 == 1)
+  {
+    // push
+    beep_signal();
+  }
+
   // disabled when calibrating
 
   if (self->counter > 7)
@@ -261,51 +311,94 @@ void progress_start(char msg[16], unsigned long duration)
   progress_rev();
 }
 
+void next_camera()
+{
+  for (size_t i = 0; i < 3; i++)
+  {
+    Keyboard.press(SHORTCUT_KEY_SWITCH_CAMERA_NEXT);
+    Keyboard.releaseAll();
+  }
+}
+
+void previous_camera()
+{
+  for (size_t i = 0; i < 3; i++)
+  {
+    Keyboard.press(SHORTCUT_KEY_SWITCH_CAMERA_PREVIOUS);
+    Keyboard.releaseAll();
+  }
+}
+
 // send scan command according to scan mode
 void send_scan_cmd()
 {
-  const int CMD_DELAY = 2000;
 
-  switch (stateButtons[5].counter)
+  switch (STATE_BUTTON_SCAN_ORDER_SELECT.counter)
   {
   case IN_APP:
-    Keyboard.press(' ');
-    Keyboard.release(' ');
+    Keyboard.press(KEY_F9);
+    Keyboard.release(KEY_F9);
     delay(1000);
     break;
 
   case RTL:
-    Keyboard.press(KEY_LEFT_CTRL);
-    //-
-    Keyboard.press('R');
-    Keyboard.release('R');
-    delay(CMD_DELAY);
-    Keyboard.press('L');
-    Keyboard.release('L');
+    next_camera();
+
+    delay(100);
+
+    // send space
+    Keyboard.press(' ');
+    Keyboard.release(' ');
+
+    delay(2100);
+
+    previous_camera();
+
+    delay(100);
+
+    // send space
+    Keyboard.press(' ');
+    Keyboard.release(' ');
     break;
 
   case LTR:
-    Keyboard.press(KEY_LEFT_CTRL);
-    //-
-    Keyboard.press('L');
-    Keyboard.release('L');
-    delay(CMD_DELAY);
-    Keyboard.press('R');
-    Keyboard.release('R');
+    previous_camera();
+
+    delay(100);
+
+    // send space
+    Keyboard.press(' ');
+    Keyboard.release(' ');
+
+    delay(2100);
+
+    next_camera();
+
+    delay(100);
+
+    // send space
+    Keyboard.press(' ');
+    Keyboard.release(' ');
     break;
 
   case R:
-    Keyboard.press(KEY_LEFT_CTRL);
-    //-
-    Keyboard.press('R');
-    Keyboard.release('R');
+    next_camera();
+
+    delay(100);
+
+    // send space
+    Keyboard.press(' ');
+    Keyboard.release(' ');
     break;
 
   case L:
-    Keyboard.press(KEY_LEFT_CTRL);
-    //-
-    Keyboard.press('L');
-    Keyboard.release('L');
+    previous_camera();
+
+    delay(100);
+
+    // send space
+    Keyboard.press(' ');
+    Keyboard.release(' ');
     break;
   }
 
@@ -314,12 +407,12 @@ void send_scan_cmd()
 
 void handle_scan_button(StateButton *self)
 {
-  if (stateButtons[7].counter % 2 == 1)
+  if (STATE_BUTTON_SCAN.counter % 2 == 1)
     return;
 
   // push
 
-  switch (stateButtons[6].counter)
+  switch (STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.counter)
   {
   case PEDAL:
     send_scan_cmd();
@@ -347,8 +440,8 @@ void handle_scan_button(StateButton *self)
       IsCalibrating = true;
 
       // disable control panel buttons when calibrating
-      stateButtons[5].disabled = true;
-      stateButtons[6].disabled = true;
+      STATE_BUTTON_SCAN_ORDER_SELECT.disabled = true;
+      STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.disabled = true;
 
       // progress
       progress_start("Calibration Mode", CALIBRATION_DURATION);
@@ -360,13 +453,12 @@ void handle_scan_button(StateButton *self)
       // buzzer
       waitcall([]()
                {
-                  digitalWrite(BUZZER, HIGH);
+                  beep_start();
 
                   waitcall([]()
                             { 
                               // end calibration
-                              
-                              digitalWrite(BUZZER, LOW);
+                              beep_end();
 
                               IsScanBlinking = true; 
                               scan_blink();
@@ -374,8 +466,8 @@ void handle_scan_button(StateButton *self)
                               IsCalibrating = false;
 
                               // reinable control panel buttons
-                              stateButtons[5].disabled = false;
-                              stateButtons[6].disabled = false;
+                              STATE_BUTTON_SCAN_ORDER_SELECT.disabled = false;
+                              STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.disabled = false;
 
                               spin_glass_up();
                               printSettings();
@@ -396,26 +488,44 @@ void handle_scan_button(StateButton *self)
       IsCalibrating = false;
 
       // reinable control panel buttons
-      stateButtons[5].disabled = false;
-      stateButtons[6].disabled = false;
+      STATE_BUTTON_SCAN_ORDER_SELECT.disabled = false;
+      STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.disabled = false;
 
       spin_glass_up();
       printSettings();
     }
     break;
   }
+
+  // short beep
+  beep_signal();
 }
 
 // glass
 
 void handle_glass_down_sensor(StateButton *self)
 {
-  if (stateButtons[8].counter % 2 == 0)
+  if (STATE_BUTTON_GLASS_DOWN_SENSOR.counter % 2 == 0)
     return;
+
+  // push
 
   digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
 
-  if (stateButtons[6].counter == AUTO)
+  // counter tackle
+  digitalWrite(GLASS_MOTOR_UP, LOW); // start
+  delay(10);
+  digitalWrite(GLASS_MOTOR_UP, HIGH); // stop
+
+  // send shortcut key to start live view when in calibration mode
+  if (STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.counter == CALIB)
+  {
+    Keyboard.press(KEY_LEFT_CTRL);
+    Keyboard.press(SHORTCUT_KEY_CALIBRATION_START_LIVE_VIEW);
+    Keyboard.releaseAll();
+  }
+
+  if (STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.counter == AUTO)
   {
     BottomTouchdownFlag = true;
     delay(200);
@@ -429,7 +539,26 @@ void handle_glass_down_sensor(StateButton *self)
 
 void handle_glass_up_sensor(StateButton *self)
 {
-  if (stateButtons[7].counter % 2 == 1)
+
+  if (STATE_BUTTON_GLASS_UP_SENSOR.counter % 2 == 1)
+  {
+    // push
+
+    // counter tackle
+    digitalWrite(GLASS_MOTOR_DOWN, LOW); // start
+    delay(10);
+    digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
+
+    // send shortcut key to start live view when in calibration mode
+    if (STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.counter == CALIB)
+    {
+      Keyboard.press(KEY_LEFT_CTRL);
+      Keyboard.press(SHORTCUT_KEY_CALIBRATION_STOP_LIVE_VIEW);
+      Keyboard.releaseAll();
+    }
+  }
+
+  if (STATE_BUTTON_SCAN.counter % 2 == 1)
     return;
 
   digitalWrite(GLASS_MOTOR_UP, HIGH); // stop
@@ -438,11 +567,11 @@ void handle_glass_up_sensor(StateButton *self)
 void handle_pedal(StateButton *self)
 {
 
-  if (stateButtons[4].counter % 2 == 0)
+  if (STATE_BUTTON_PEDAL.counter % 2 == 0)
   {
     // release
 
-    switch (stateButtons[6].counter)
+    switch (STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.counter)
     {
     case PANEL:
       digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
@@ -471,7 +600,7 @@ void handle_pedal(StateButton *self)
   {
     // push
 
-    switch (stateButtons[6].counter)
+    switch (STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.counter)
     {
     case PEDAL:
       send_scan_cmd();
@@ -497,7 +626,7 @@ unsigned long projector_idle_time = 0U;
 void handle_projector(StateButton *self)
 {
 
-  if (stateButtons[10].counter % 2 == 0)
+  if (STATE_BUTTON_LED_PROJECTOR_SENSOR.counter % 2 == 0)
   {
     // release
     analogWrite(LED_PROJECTOR, LED_PROJECTOR_LOW);
@@ -508,7 +637,6 @@ void handle_projector(StateButton *self)
 
     analogWrite(LED_PROJECTOR, LED_PROJECTOR_HIGH);
     projector_idle_time = millis();
-
   }
 }
 
@@ -527,7 +655,7 @@ void printSettings()
   lcd.print(" Order:   ");
   lcd.setCursor(0, 1);
 
-  switch (stateButtons[5].counter)
+  switch (STATE_BUTTON_SCAN_ORDER_SELECT.counter)
   {
   case 0:
   case 1:
@@ -555,7 +683,7 @@ void printSettings()
   lcd.print("Mode: ");
   lcd.setCursor(10, 1);
 
-  switch (stateButtons[6].counter)
+  switch (STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.counter)
   {
   case 0:
   case 1:
@@ -637,10 +765,10 @@ void loop()
   // lcd.setCursor(0, 0);
   // lcd.print(str);
 
-  doChores();  
+  doChores();
 
-  if (millis() > projector_idle_time + LED_PROJECTOR_TIMOUT)
-      analogWrite(LED_PROJECTOR, LED_PROJECTOR_LOW);
+  if (millis() > projector_idle_time + LED_PROJECTOR_TIMEOUT)
+    analogWrite(LED_PROJECTOR, LED_PROJECTOR_LOW);
 
   // char str[4];
   // sprintf(str, "%d", digitalRead(A2));
