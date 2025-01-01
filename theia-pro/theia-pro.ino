@@ -64,6 +64,9 @@ const unsigned long LED_PROJECTOR_TIMEOUT = 300000U; // 5 minutes
 const unsigned short BUZZER = 4U;
 const unsigned short SCAN_LED = 13U;
 
+const unsigned short UV_LIGHT = 12U;
+const unsigned short STANDBY = 11U;
+
 const unsigned short GLASS_UP_SENSOR = 7;
 const unsigned short GLASS_DOWN_SENSOR = 8;
 const unsigned short GLASS_MOTOR_UP = 6;   // (RED LED)
@@ -79,6 +82,7 @@ const unsigned long BUTTON_BEEP_DURATION = 200U; // the duration of every button
 bool BottomTouchdownFlag = false; // Used in auto mode, has the pedal touched the bottom sensor.
 bool IsCalibrating = false;       // Is the calibration in action
 bool IsScanBlinking = false;      // Is the scan button blinking
+bool IsOnStandBy = false;         // Is the system in stand by
 
 void nothing() {};
 
@@ -755,8 +759,52 @@ void setup()
   Serial.begin(9600);
 }
 
+void enter_stand_by()
+{
+
+  beep_end();
+
+  digitalWrite(GLASS_MOTOR_UP, HIGH);   // stop
+  digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
+
+  lcd.setCursor(0, 0);
+  lcd.print("    Stand-by    ");
+  lcd.setCursor(0, 1);
+  lcd.print("                ");
+}
+
+// returns true if in standby modee
+bool check_is_standby()
+{
+  bool result = digitalRead(STANDBY) == LOW;
+
+  // do not trigger change if state was not changed before last check.
+  if (result == IsOnStandBy)
+  {
+    return result;
+  };
+
+  // change
+
+  if (result == true)
+  {
+    IsOnStandBy = true;
+    enter_stand_by();
+  }
+  else
+  {
+    IsOnStandBy = false;
+    printSettings();
+  }
+
+  return result;
+}
+
 void loop()
 {
+  // stop execution if on standby
+  if (check_is_standby() == true)
+    return;
 
   cycleStateButtons();
 
