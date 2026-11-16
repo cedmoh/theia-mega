@@ -1,0 +1,7 @@
+Theia Pro Key map:
+Ctrl + F5 // shortcut key to start the live view when the glass is lowered (LiveViewWndShow)
+Ctrl + F3 // shortcut key to stop the live view when the glass is lifted (LiveViewWndHide)
+F7 // shortcut key to swap to the previous camera
+F8 // shortcut key to swap to the next camera
+F9 // multiple cameras capture (cap all)
+Space // single camera capture

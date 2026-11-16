@@ -39,7 +39,7 @@ LiquidCrystal_I2C lcd(0x27, 16, 4);
 
 // shortcut keys
 #define SHORTCUT_KEY_CALIBRATION_START_LIVE_VIEW KEY_F5 // shortcut key to start the live view when the glass is lowered
-#define SHORTCUT_KEY_CALIBRATION_STOP_LIVE_VIEW KEY_F4  // shortcut key to stop the live view when the glass is lifted
+#define SHORTCUT_KEY_CALIBRATION_STOP_LIVE_VIEW KEY_F3  // shortcut key to stop the live view when the glass is lifted
 #define SHORTCUT_KEY_SWITCH_CAMERA_PREVIOUS KEY_F7      // shortcut key to swap to the previous camera
 #define SHORTCUT_KEY_SWITCH_CAMERA_NEXT KEY_F8          // shortcut key to swap to the next camera
 
@@ -77,12 +77,13 @@ const unsigned long CALIBRATION_ALARM_DURATION = 8000U; // 8 seconds
 // const unsigned long CALIBRATION_DURATION = 4000U; // 4 seconds
 // const unsigned long CALIBRATION_ALARM_DURATION = 1000U; // 1 second
 
-const unsigned long BUTTON_BEEP_DURATION = 200U; // the duration of every button press beep
+const unsigned long BUTTON_BEEP_DURATION = 60U; // the duration of every button press beep
 
 bool BottomTouchdownFlag = false; // Used in auto mode, has the pedal touched the bottom sensor.
 bool IsCalibrating = false;       // Is the calibration in action
 bool IsScanBlinking = false;      // Is the scan button blinking
 bool IsOnStandBy = false;         // Is the system in stand by
+unsigned short CalibrationOrder = RTL;
 
 void nothing() {};
 
@@ -102,6 +103,9 @@ void handle_pedal(StateButton *self);
 void handle_projector(StateButton *self);
 
 void printSettings();
+void next_camera();
+void previous_camera();
+void reset_calibration_button_states();
 
 // attempts to spin the glass up
 // does nothing if the up sensor won't allow it
@@ -137,7 +141,7 @@ struct StateButton stateButtons[] = {
     {A0, 0U, 0, 0, 0, 1, 0U, nothing},                  // 2  [UNUSED]
     {A1, 0U, 0, 0, 0, 1, 0U, nothing},                  // 3  [UNUSED]
     {A2, 0U, 0, 0, 0, 0, 0U, handle_pedal},             // 4  Pedal
-    {A3, 0U, 0, 0, 0, 0, 0U, switch_ord},               // 5  Scan Order Selector
+    {A3, 0U, 0, 0, 0, 0, RTL, switch_ord},              // 5  Scan Order Selector
     {A4, 0U, 0, 0, 0, 0, 0U, switch_mode},              // 6  Scan Mode & Calibration
     {A5, 0U, 0, 0, 0, 0, 0U, handle_scan_button},       // 7  Scan
     {8U, 0U, 0, 1, 1, 0, 0U, handle_glass_down_sensor}, // 8  Glass Down Sensor
@@ -217,6 +221,19 @@ void scan_blink()
 
 void switch_ord(StateButton *self)
 {
+  if (IsCalibrating)
+  {
+    self->counter = CalibrationOrder;
+
+    if (self->reading == HIGH)
+    {
+      beep_signal();
+      previous_camera();
+    }
+
+    return;
+  }
+
   if (STATE_BUTTON_SCAN_ORDER_SELECT.counter % 2 == 1)
   {
     // push
@@ -239,13 +256,24 @@ void switch_led_side(StateButton *self)
 
 void switch_mode(StateButton *self)
 {
+  if (IsCalibrating)
+  {
+    self->counter = CALIB;
+
+    if (self->reading == HIGH)
+    {
+      beep_signal();
+      next_camera();
+    }
+
+    return;
+  }
+
   if (STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.counter % 2 == 1)
   {
     // push
     beep_signal();
   }
-
-  // disabled when calibrating
 
   if (self->counter > 7)
     self->counter = AUTO;
@@ -330,6 +358,25 @@ void previous_camera()
   {
     Keyboard.press(SHORTCUT_KEY_SWITCH_CAMERA_PREVIOUS);
     Keyboard.releaseAll();
+  }
+}
+
+/// reset the calibration button states 
+/// to the current calibration order and mode
+void reset_calibration_button_states()
+{
+  StateButton *buttons[] = {
+      &STATE_BUTTON_SCAN_ORDER_SELECT,
+      &STATE_BUTTON_SCAN_MODE_AND_CALIBRATION};
+  unsigned int counters[] = {CalibrationOrder, CALIB};
+
+  for (size_t i = 0; i < sizeof(buttons) / sizeof(buttons[0]); i++)
+  {
+    buttons[i]->counter = counters[i];
+    buttons[i]->reading = digitalRead(buttons[i]->PIN);
+    buttons[i]->last_reading = buttons[i]->reading;
+    buttons[i]->state = buttons[i]->reading;
+    buttons[i]->DEB = millis();
   }
 }
 
@@ -443,9 +490,8 @@ void handle_scan_button(StateButton *self)
       // start calibration
       IsCalibrating = true;
 
-      // disable control panel buttons when calibrating
-      STATE_BUTTON_SCAN_ORDER_SELECT.disabled = true;
-      STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.disabled = true;
+      CalibrationOrder = STATE_BUTTON_SCAN_ORDER_SELECT.counter;
+      CalibrationOrder -= CalibrationOrder % 2;
 
       // progress
       progress_start("Calibration Mode", CALIBRATION_DURATION);
@@ -467,11 +513,8 @@ void handle_scan_button(StateButton *self)
                               IsScanBlinking = true; 
                               scan_blink();
 
+                              reset_calibration_button_states();
                               IsCalibrating = false;
-
-                              // reinable control panel buttons
-                              STATE_BUTTON_SCAN_ORDER_SELECT.disabled = false;
-                              STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.disabled = false;
 
                               spin_glass_up();
                               printSettings();
@@ -489,11 +532,8 @@ void handle_scan_button(StateButton *self)
       IsScanBlinking = true;
       scan_blink();
 
+      reset_calibration_button_states();
       IsCalibrating = false;
-
-      // reinable control panel buttons
-      STATE_BUTTON_SCAN_ORDER_SELECT.disabled = false;
-      STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.disabled = false;
 
       spin_glass_up();
       printSettings();
@@ -557,7 +597,9 @@ void handle_glass_up_sensor(StateButton *self)
     if (STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.counter == CALIB)
     {
       Keyboard.press(KEY_LEFT_CTRL);
+      delay(200);
       Keyboard.press(SHORTCUT_KEY_CALIBRATION_STOP_LIVE_VIEW);
+      delay(200);
       Keyboard.releaseAll();
     }
   }
@@ -663,7 +705,7 @@ void printSettings()
   {
   case 0:
   case 1:
-    lcd.print(" In App   ");
+    lcd.print(" Cap ALL  ");
     break;
   case 2:
   case 3:
@@ -808,17 +850,8 @@ void loop()
 
   cycleStateButtons();
 
-  // char str[24];
-  // sprintf(str, "%lu", millis());
-  // lcd.setCursor(0, 0);
-  // lcd.print(str);
-
   doChores();
 
   if (millis() > projector_idle_time + LED_PROJECTOR_TIMEOUT)
     analogWrite(LED_PROJECTOR, LED_PROJECTOR_LOW);
-
-  // char str[4];
-  // sprintf(str, "%d", digitalRead(A2));
-  // lcd.print(str);
 }

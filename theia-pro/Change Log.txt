@@ -1,0 +1,13 @@
+1. Standby Mode 
+
+2. Built-in Motor Brake
+
+3. Automatic Live View Activation When Entering Adjustment Mode
+
+4. Right to Left and Left to Right Modes with Automatic Live View Crop for Each Page
+
+5. Beep Sound When Pressing Buttons
+
+6. Adjustment Extended to 4 Minutes
+
+7. Display "Standby Mode" When Main Power Is Off

@@ -18,6 +18,9 @@ GLASS_MOTOR_DOWN = 5;
 BUZZER = 4;
 SCAN_LED = 13;
 
+UV_LIGHT = 12;
+STANDBY = 11;
+
 Pedal = A2;
 Scan Order Selector = A3;
 Scan Mode & Calibration = A4;
