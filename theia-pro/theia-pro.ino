@@ -78,11 +78,18 @@ const unsigned long CALIBRATION_ALARM_DURATION = 8000U; // 8 seconds
 // const unsigned long CALIBRATION_ALARM_DURATION = 1000U; // 1 second
 
 const unsigned long BUTTON_BEEP_DURATION = 60U; // the duration of every button press beep
+const unsigned long SCAN_HOLD_DURATION = 3000U;
 
 bool BottomTouchdownFlag = false; // Used in auto mode, has the pedal touched the bottom sensor.
 bool IsCalibrating = false;       // Is the calibration in action
 bool IsScanBlinking = false;      // Is the scan button blinking
 bool IsOnStandBy = false;         // Is the system in stand by
+bool ScanHoldTriggered = false;
+bool IsScanGlassLockPending = false;
+bool IsScanGlassLockAtDown = false;
+bool IsScanGlassRaiseRequested = false;
+bool IsScanGlassRaising = false;
+unsigned long scan_button_pressed_at = 0U;
 unsigned short CalibrationOrder = RTL;
 
 void nothing() {};
@@ -94,6 +101,7 @@ void switch_led_side(StateButton *self);
 void switch_mode(StateButton *self);
 
 void handle_scan_button(StateButton *self);
+void handle_scan_button_hold();
 
 void handle_glass_down_sensor(StateButton *self);
 void handle_glass_up_sensor(StateButton *self);
@@ -456,12 +464,84 @@ void send_scan_cmd()
   Keyboard.releaseAll();
 }
 
+void finish_scan_glass_lock_raise()
+{
+  IsScanGlassRaising = false;
+  IsScanGlassLockPending = false;
+  IsScanGlassLockAtDown = false;
+  IsScanGlassRaiseRequested = false;
+  analogWrite(LED_PROJECTOR, LED_PROJECTOR_LOW);
+}
+
+void start_scan_glass_lock_raise()
+{
+  if (!IsScanGlassLockPending)
+    return;
+
+  if (!IsScanGlassLockAtDown)
+  {
+    IsScanGlassRaiseRequested = true;
+    return;
+  }
+
+  IsScanGlassRaiseRequested = false;
+  IsScanGlassRaising = true;
+  digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
+
+  if (!spin_glass_up())
+    finish_scan_glass_lock_raise();
+}
+
+void handle_scan_button_hold()
+{
+  if (ScanHoldTriggered ||
+      IsScanGlassLockPending ||
+      STATE_BUTTON_SCAN.counter % 2 == 0 ||
+      STATE_BUTTON_SCAN.state != HIGH ||
+      STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.counter == CALIB)
+    return;
+
+  if (millis() - scan_button_pressed_at < SCAN_HOLD_DURATION)
+    return;
+
+  ScanHoldTriggered = true;
+  beep_signal();
+  analogWrite(LED_PROJECTOR, 0);
+
+  IsScanGlassLockPending = true;
+  IsScanGlassLockAtDown = false;
+  IsScanGlassRaiseRequested = false;
+  IsScanGlassRaising = false;
+
+  digitalWrite(GLASS_MOTOR_UP, HIGH); // stop
+  digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
+
+  if (!spin_glass_down())
+    IsScanGlassLockAtDown = true;
+}
+
 void handle_scan_button(StateButton *self)
 {
   if (STATE_BUTTON_SCAN.counter % 2 == 1)
+  {
+    scan_button_pressed_at = millis();
+    ScanHoldTriggered = false;
     return;
+  }
 
   // push
+
+  if (ScanHoldTriggered)
+  {
+    ScanHoldTriggered = false;
+    return;
+  }
+
+  if (IsScanGlassLockPending)
+  {
+    start_scan_glass_lock_raise();
+    return;
+  }
 
   switch (STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.counter)
   {
@@ -556,6 +636,17 @@ void handle_glass_down_sensor(StateButton *self)
 
   digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
 
+  if (IsScanGlassLockPending)
+  {
+    digitalWrite(GLASS_MOTOR_UP, HIGH); // stop
+    IsScanGlassLockAtDown = true;
+
+    if (IsScanGlassRaiseRequested)
+      start_scan_glass_lock_raise();
+
+    return;
+  }
+
   // counter tackle
   digitalWrite(GLASS_MOTOR_UP, LOW); // start
   delay(10);
@@ -586,6 +677,14 @@ void handle_glass_up_sensor(StateButton *self)
 
   if (STATE_BUTTON_GLASS_UP_SENSOR.counter % 2 == 1)
   {
+    if (IsScanGlassRaising)
+    {
+      digitalWrite(GLASS_MOTOR_UP, HIGH); // stop
+      digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
+      finish_scan_glass_lock_raise();
+      return;
+    }
+
     // push
 
     // counter tackle
@@ -612,6 +711,8 @@ void handle_glass_up_sensor(StateButton *self)
 
 void handle_pedal(StateButton *self)
 {
+  if (IsScanGlassLockPending)
+    return;
 
   if (STATE_BUTTON_PEDAL.counter % 2 == 0)
   {
@@ -671,6 +772,11 @@ unsigned long projector_idle_time = 0U;
 // projector
 void handle_projector(StateButton *self)
 {
+  if (IsScanGlassLockPending)
+  {
+    analogWrite(LED_PROJECTOR, 0);
+    return;
+  }
 
   if (STATE_BUTTON_LED_PROJECTOR_SENSOR.counter % 2 == 0)
   {
@@ -850,8 +956,10 @@ void loop()
 
   cycleStateButtons();
 
+  handle_scan_button_hold();
+
   doChores();
 
-  if (millis() > projector_idle_time + LED_PROJECTOR_TIMEOUT)
+  if (!IsScanGlassLockPending && millis() > projector_idle_time + LED_PROJECTOR_TIMEOUT)
     analogWrite(LED_PROJECTOR, LED_PROJECTOR_LOW);
 }
