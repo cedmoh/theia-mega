@@ -12,6 +12,6 @@
 
 7. Display "Standby Mode" When Main Power Is Off
 
-8. Default Scan Order Set to RTL; Rename "In App" to "CAP ALL"; In Calibration, Order and Mode Switch to the Previous and Next Cameras; Update the Live View Stop Shortcut to F3 and Button Beep Duration to 60 ms
+8. Default Scan Order Set to RTL; Rename "In App" to "CAP ALL"; In Calibration, Order and Mode Switch to the Previous and Next Cameras; Update the Live View Stop Shortcut to Ctrl + F3 and Button Beep Duration to 60 ms
 
 9. Hold the Scan Button for 3 Seconds Outside Calibration to Lower and Lock the Glass. Press Scan Again to Raise It; the Projector Turns Off During This Process and Returns to LOW When the Glass Reaches the Top

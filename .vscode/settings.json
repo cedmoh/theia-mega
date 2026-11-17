@@ -6,8 +6,9 @@
     "unordered_map": "cpp",
     "string_view": "cpp",
     "initializer_list": "cpp",
-    "state_button.h": "c",
-    "queue.h": "c",
+    "*.ino": "cpp",
+    "state_button.h": "cpp",
+    "queue.h": "cpp",
     "*.ixx": "cpp"
   }
 }

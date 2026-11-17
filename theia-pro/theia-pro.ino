@@ -92,7 +92,8 @@ bool IsScanGlassRaising = false;
 unsigned long scan_button_pressed_at = 0U;
 unsigned short CalibrationOrder = RTL;
 
-void nothing() {};
+void nothing(StateButton *self);
+void nothing(StateButton *self) {}
 
 void test(StateButton *self);
 
@@ -369,7 +370,7 @@ void previous_camera()
   }
 }
 
-/// reset the calibration button states 
+/// reset the calibration button states
 /// to the current calibration order and mode
 void reset_calibration_button_states()
 {
@@ -513,7 +514,7 @@ void handle_scan_button_hold()
   IsScanGlassRaiseRequested = false;
   IsScanGlassRaising = false;
 
-  digitalWrite(GLASS_MOTOR_UP, HIGH); // stop
+  digitalWrite(GLASS_MOTOR_UP, HIGH);   // stop
   digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
 
   if (!spin_glass_down())
@@ -679,7 +680,7 @@ void handle_glass_up_sensor(StateButton *self)
   {
     if (IsScanGlassRaising)
     {
-      digitalWrite(GLASS_MOTOR_UP, HIGH); // stop
+      digitalWrite(GLASS_MOTOR_UP, HIGH);   // stop
       digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
       finish_scan_glass_lock_raise();
       return;
