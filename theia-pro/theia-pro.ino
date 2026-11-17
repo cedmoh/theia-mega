@@ -228,6 +228,23 @@ void scan_blink()
 
 // order
 
+// opens live view in the following cases:
+void open_live_view()
+{
+  Keyboard.press(KEY_LEFT_CTRL);
+  Keyboard.press(SHORTCUT_KEY_CALIBRATION_START_LIVE_VIEW);
+  Keyboard.releaseAll();
+}
+
+void close_live_view()
+{
+  Keyboard.press(KEY_LEFT_CTRL);
+  Keyboard.press(SHORTCUT_KEY_CALIBRATION_STOP_LIVE_VIEW);
+  Keyboard.press(SHORTCUT_KEY_CALIBRATION_STOP_LIVE_VIEW);
+  Keyboard.press(SHORTCUT_KEY_CALIBRATION_STOP_LIVE_VIEW);
+  Keyboard.releaseAll();
+}
+
 void switch_ord(StateButton *self)
 {
   if (IsCalibrating)
@@ -238,6 +255,8 @@ void switch_ord(StateButton *self)
     {
       beep_signal();
       previous_camera();
+      delay(200);
+      open_live_view();
     }
 
     return;
@@ -273,6 +292,8 @@ void switch_mode(StateButton *self)
     {
       beep_signal();
       next_camera();
+      delay(200);
+      open_live_view();
     }
 
     return;
@@ -656,9 +677,8 @@ void handle_glass_down_sensor(StateButton *self)
   // send shortcut key to start live view when in calibration mode
   if (STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.counter == CALIB)
   {
-    Keyboard.press(KEY_LEFT_CTRL);
-    Keyboard.press(SHORTCUT_KEY_CALIBRATION_START_LIVE_VIEW);
-    Keyboard.releaseAll();
+    // to enable live view when the glass is lowered in calibration mode uncomment this line
+    // open_live_view();
   }
 
   if (STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.counter == AUTO)
@@ -696,11 +716,7 @@ void handle_glass_up_sensor(StateButton *self)
     // send shortcut key to start live view when in calibration mode
     if (STATE_BUTTON_SCAN_MODE_AND_CALIBRATION.counter == CALIB)
     {
-      Keyboard.press(KEY_LEFT_CTRL);
-      delay(200);
-      Keyboard.press(SHORTCUT_KEY_CALIBRATION_STOP_LIVE_VIEW);
-      delay(200);
-      Keyboard.releaseAll();
+      close_live_view();
     }
   }
 
